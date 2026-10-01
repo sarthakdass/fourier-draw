@@ -4,8 +4,6 @@ Draw a shape with the mouse and watch 201 rotating vectors redraw it.
 
 Built with Python, Pygame, `math` and `cmath`.
 
-Additionally attached HTML version for my personal website.
-
 ![demo](docs/demo.gif)
 
 ## Run it
