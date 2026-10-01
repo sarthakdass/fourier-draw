@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fourier Visualization — Sarthak Dassarma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [["\\(", "\\)"]],
+      displayMath: [["\\[", "\\]"]]
+    },
+    options: {
+      skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+    },
+    startup: {
+      pageReady: function () {
+        return MathJax.startup.defaultPageReady().then(function () {
+          var panels = document.querySelectorAll(".formula");
+          for (var i = 0; i < panels.length; i++) panels[i].classList.add("ready");
+        });
+      }
+    }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+  :root {
+    --paper: #f3dec4;
+    --canvas: #fbf3e4;
+    --ink: #2e1503;
+    --ink-soft: #80471c;
+    --line: #d8d3c4;
+    --accent: #652a0e;
+    --accent-soft: #7BB5A3;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Public Sans', -apple-system, sans-serif;
+    line-height: 1.65;
+  }
+
+  h1, h2 {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 0 56px;
+  }
+
+  header.top {
+    padding: 48px 0 26px;
+    border-bottom: 3px solid var(--line);
+  }
+  .back {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    display: inline-block;
+    margin-bottom: 18px;
+  }
+  header.top h1 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); line-height: 1.2; }
+  header.top p {
+    margin: 14px 0 0;
+    max-width: 68ch;
+    color: var(--ink-soft);
+  }
+
+  main { padding: 34px 0 70px; }
+
+  .stage {
+    position: relative;
+    background: var(--canvas);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: min(62vh, 540px);
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .status {
+    position: absolute;
+    left: 16px;
+    top: 14px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    pointer-events: none;
+    max-width: 60%;
+  }
+  .readout {
+    position: absolute;
+    right: 16px;
+    top: 14px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+
+  .controls {
+    margin-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 26px;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .controls label { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+  .controls input[type="range"] { width: 130px; accent-color: var(--accent); }
+  .controls input[type="checkbox"] { accent-color: var(--accent); }
+  .controls .val {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    min-width: 3.4em;
+  }
+  button {
+    font: 500 0.9rem 'Public Sans', sans-serif;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--ink-soft);
+    border-radius: 999px;
+    padding: 6px 16px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .notes {
+    margin-top: 56px;
+    padding-top: 30px;
+    border-top: 1px solid var(--line);
+    max-width: 70ch;
+  }
+  .notes h2 { font-size: 1.25rem; margin-bottom: 14px; }
+  .notes p { margin: 0 0 14px; }
+  .formula {
+    margin: 22px 0;
+    padding: 6px 20px;
+    background: var(--canvas);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  /* Before MathJax typesets, show the raw TeX quietly rather than flashing it. */
+  .formula mjx-container { margin: 0 !important; }
+  .formula:not(.ready) { font-size: 0.95rem; color: var(--ink-soft); }
+
+  footer {
+    padding: 26px 0 40px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 0 20px; }
+    canvas { height: min(52vh, 420px); }
+    .controls { gap: 12px 18px; }
+    .controls input[type="range"] { width: 108px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="back" href="../index.html#projects">&larr; Back to projects</a>
+    <h1>Fourier Visualization</h1>
+    <p>The program takes a user's drawing with a mouse as a complex Fourier series function of 201 rotating
+    vectors each rotated by a unique complex constant and calculates these complex constants to obtain the
+    parameterized Fourier function. After the user draws their picture, the program displays an animation of
+    the user's drawn shape with this Fourier Series. (Explanation below the canvas)</p>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div class="stage">
+      <canvas id="stage"></canvas>
+      <div class="status" id="status">Drag anywhere on the canvas to draw your own shape.</div>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="controls">
+      <button id="redraw" type="button">Draw your own</button>
+      <button id="playpause" type="button">Pause</button>
+      <label>Speed
+        <input id="speed" type="range" min="0.2" max="4" step="0.05" value="1">
+        <span class="val" id="speedVal">1.0&times;</span>
+      </label>
+      <label>Terms
+        <input id="terms" type="range" min="1" max="201" step="1" value="201">
+        <span class="val" id="termsVal">201</span>
+      </label>
+      <label><input id="guide" type="checkbox" checked> Show original path</label>
+    </div>
+
+    <section class="notes">
+      <h2>How it works</h2>
+      <p>A point on screen at \((x, y)\) is read as the complex number \(x + iy\), measured from the center
+      of the canvas. The drawing becomes a complex-valued function \(f(t)\) with \(t\) running from \(0\) to
+      \(1\) over one trip around the path.</p>
+      <p>\(e^{2\pi i t}\) is a unit vector making one counterclockwise turn as \(t\) goes from \(0\) to
+      \(1\). Multiplying by a complex constant \(c\) scales it to length \(|c|\) and starts it at angle
+      \(\arg(c)\); replacing \(t\) by \(nt\) makes it turn \(n\) times per cycle, clockwise when \(n\) is
+      negative. Adding \(201\) of those tip to tail gives the approximation</p>
+      <div class="formula">
+        \[ f(t) \;\approx\; \sum_{n=-100}^{100} c_n e^{2\pi i n t}, \qquad
+           c_n = \int_0^1 f(t)\, e^{-2\pi i n t}\, dt. \]
+      </div>
+      <p>The integral is evaluated as a Riemann sum over \(K = 1500\) points of the path:</p>
+      <div class="formula">
+        \[ c_n \;\approx\; \frac{1}{K} \sum_{k=0}^{K-1} f\!\left(\frac{k}{K}\right) e^{-2\pi i n k / K}. \]
+      </div>
+      <p>The path is resampled at constant arc
+      length, because mouse samples bunch up for slow drawings, and it is closed back onto its
+      starting point so that \(f\) is periodic. The vectors are then drawn largest first, so that
+      lowering the term count above keeps the harmonics carrying the shape and you can watch the
+      approximation coarsen one harmonic at a time.</p>
+      <p>Written first in Python with Pygame, then ported to Canvas for this page.</p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">&copy; 2026 Sarthak Dassarma.</div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var HARMONICS = 100;          // n from -100 to 100 -> 201 rotating vectors
+  var SAMPLES = 1500;           // points used for the Riemann sum
+  var BASE_CYCLE = 12;          // seconds per full revolution at 1x speed
+  var MIN_CIRCLE = 1.2;         // circles smaller than this are not drawn
+
+  var canvas = document.getElementById("stage");
+  var ctx = canvas.getContext("2d");
+  var statusEl = document.getElementById("status");
+  var readoutEl = document.getElementById("readout");
+  var redrawBtn = document.getElementById("redraw");
+  var playBtn = document.getElementById("playpause");
+  var speedInput = document.getElementById("speed");
+  var speedVal = document.getElementById("speedVal");
+  var termsInput = document.getElementById("terms");
+  var termsVal = document.getElementById("termsVal");
+  var guideInput = document.getElementById("guide");
+
+  var W = 0, H = 0;             // CSS pixels
+  var mode = "animate";         // "draw" or "animate"
+  var raw = [];                 // drawn path, {x, y} relative to the centre
+  var terms = [];               // {n, re, im, mag} sorted by |c| descending
+  var used = 201;
+  var trail = [];
+  var t = 0;
+  var speed = 1;
+  var playing = true;
+  var showGuide = true;
+  var drawing = false;
+  var lastFrame = 0;
+
+  // ---- geometry ------------------------------------------------------
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    W = rect.width;
+    H = rect.height;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function pointerPoint(event) {
+    var rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left - W / 2, y: event.clientY - rect.top - H / 2 };
+  }
+
+  // Walk the closed path at constant speed and return `count` evenly spaced
+  // points.  Closing it first keeps f(t) periodic, which the series assumes.
+  function resampleClosed(points, count) {
+    var path = points.slice();
+    var first = path[0], last = path[path.length - 1];
+    if (first.x !== last.x || first.y !== last.y) path.push({ x: first.x, y: first.y });
+
+    var cumulative = [0];
+    for (var i = 1; i < path.length; i++) {
+      var dx = path[i].x - path[i - 1].x;
+      var dy = path[i].y - path[i - 1].y;
+      cumulative.push(cumulative[i - 1] + Math.sqrt(dx * dx + dy * dy));
+    }
+    var total = cumulative[cumulative.length - 1];
+
+    var re = new Float64Array(count);
+    var im = new Float64Array(count);
+    if (total === 0) {
+      re.fill(path[0].x);
+      im.fill(path[0].y);
+      return { re: re, im: im };
+    }
+
+    var j = 0;
+    for (var k = 0; k < count; k++) {
+      var target = total * k / count;
+      while (j < path.length - 2 && cumulative[j + 1] < target) j++;
+      var span = cumulative[j + 1] - cumulative[j];
+      var frac = span === 0 ? 0 : (target - cumulative[j]) / span;
+      re[k] = path[j].x + (path[j + 1].x - path[j].x) * frac;
+      im[k] = path[j].y + (path[j + 1].y - path[j].y) * frac;
+    }
+    return { re: re, im: im };
+  }
+
+  // ---- the Fourier part ----------------------------------------------
+
+  // c_n ~ (1/K) * sum_k f(k/K) * exp(-2*pi*i*n*k/K)
+  function fourierCoefficients(samples) {
+    var K = samples.re.length;
+    var out = [];
+    for (var n = -HARMONICS; n <= HARMONICS; n++) {
+      var sumRe = 0, sumIm = 0;
+      var step = -2 * Math.PI * n / K;
+      for (var k = 0; k < K; k++) {
+        var angle = step * k;
+        var c = Math.cos(angle), s = Math.sin(angle);
+        sumRe += samples.re[k] * c - samples.im[k] * s;
+        sumIm += samples.re[k] * s + samples.im[k] * c;
+      }
+      sumRe /= K;
+      sumIm /= K;
+      out.push({ n: n, re: sumRe, im: sumIm, mag: Math.sqrt(sumRe * sumRe + sumIm * sumIm) });
+    }
+    // Largest circles first: nicer to watch, and truncating keeps the best terms.
+    out.sort(function (a, b) { return b.mag - a.mag; });
+    return out;
+  }
+
+  // Add the vectors tip to tail, returning every joint from origin to tip.
+  function joints(count, time) {
+    var x = 0, y = 0;
+    var pts = [{ x: 0, y: 0 }];
+    for (var i = 0; i < count; i++) {
+      var term = terms[i];
+      var angle = 2 * Math.PI * term.n * time;
+      var c = Math.cos(angle), s = Math.sin(angle);
+      x += term.re * c - term.im * s;
+      y += term.re * s + term.im * c;
+      pts.push({ x: x, y: y });
+    }
+    return pts;
+  }
+
+  // ---- drawing -------------------------------------------------------
+
+  function moveTo(p) { ctx.moveTo(p.x + W / 2, p.y + H / 2); }
+  function lineTo(p) { ctx.lineTo(p.x + W / 2, p.y + H / 2); }
+
+  function strokePath(points, color, width, close) {
+    if (points.length < 2) return;
+    ctx.beginPath();
+    moveTo(points[0]);
+    for (var i = 1; i < points.length; i++) lineTo(points[i]);
+    if (close) ctx.closePath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  function drawEpicycles(pts) {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(46, 21, 3, 0.11)";
+    ctx.beginPath();
+    for (var i = 0; i < pts.length - 1; i++) {
+      var dx = pts[i + 1].x - pts[i].x;
+      var dy = pts[i + 1].y - pts[i].y;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      if (r < MIN_CIRCLE) continue;
+      ctx.moveTo(pts[i].x + W / 2 + r, pts[i].y + H / 2);
+      ctx.arc(pts[i].x + W / 2, pts[i].y + H / 2, r, 0, 2 * Math.PI);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(46, 21, 3, 0.42)";
+    ctx.beginPath();
+    for (var k = 0; k < pts.length - 1; k++) {
+      moveTo(pts[k]);
+      lineTo(pts[k + 1]);
+    }
+    ctx.stroke();
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+
+    if (mode === "draw") {
+      strokePath(raw, "#2e1503", 2.2, false);
+      readoutEl.textContent = raw.length > 1 ? raw.length + " points" : "";
+      return;
+    }
+
+    var pts = joints(Math.min(used, terms.length), t);
+
+    if (showGuide && raw.length > 1) strokePath(raw, "rgba(128, 71, 28, 0.3)", 1.4, true);
+    drawEpicycles(pts);
+    strokePath(trail, "#652a0e", 2.4, false);
+
+    var tip = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.arc(tip.x + W / 2, tip.y + H / 2, 3.2, 0, 2 * Math.PI);
+    ctx.fillStyle = "#652a0e";
+    ctx.fill();
+
+    readoutEl.textContent = "t = " + t.toFixed(3);
+  }
+
+  function frame(now) {
+    var dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.05) : 0;
+    lastFrame = now;
+
+    if (mode === "animate" && playing && terms.length) {
+      var cycle = BASE_CYCLE / speed;
+      t = (t + dt / cycle) % 1;
+      var pts = joints(Math.min(used, terms.length), t);
+      trail.push(pts[pts.length - 1]);
+      var cap = Math.round(60 * cycle);
+      if (trail.length > cap) trail.splice(0, trail.length - cap);
+    }
+
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- state ---------------------------------------------------------
+
+  function analyse(points) {
+    if (points.length < 2) return;
+    raw = points;
+    terms = fourierCoefficients(resampleClosed(points, SAMPLES));
+    used = parseInt(termsInput.value, 10);
+    trail = [];
+    t = 0;
+    mode = "animate";
+    playing = true;
+    playBtn.textContent = "Pause";
+    statusEl.textContent = "201 rotating vectors, tip to tail. Drag on the canvas to draw a new shape.";
+  }
+
+  function startDrawing() {
+    mode = "draw";
+    raw = [];
+    trail = [];
+    terms = [];
+    statusEl.textContent = "Drag to draw a closed shape, then let go.";
+    readoutEl.textContent = "";
+  }
+
+  // A five-pointed star so the page is alive before anyone draws: the sharp
+  // corners are exactly where a truncated series visibly rounds off.
+  function demoShape() {
+    var R = Math.min(W, H) * 0.34;
+    var points = [];
+    for (var i = 0; i <= 10; i++) {
+      var angle = -Math.PI / 2 + i * Math.PI / 5;
+      var r = (i % 2 === 0) ? R : R * 0.42;
+      var from = { x: r * Math.cos(angle), y: r * Math.sin(angle) };
+      var nextAngle = -Math.PI / 2 + (i + 1) * Math.PI / 5;
+      var nextR = ((i + 1) % 2 === 0) ? R : R * 0.42;
+      var to = { x: nextR * Math.cos(nextAngle), y: nextR * Math.sin(nextAngle) };
+      for (var s = 0; s < 24; s++) {
+        points.push({
+          x: from.x + (to.x - from.x) * s / 24,
+          y: from.y + (to.y - from.y) * s / 24
+        });
+      }
+    }
+    return points;
+  }
+
+  // ---- events --------------------------------------------------------
+
+  canvas.addEventListener("pointerdown", function (event) {
+    event.preventDefault();
+    canvas.setPointerCapture(event.pointerId);
+    startDrawing();
+    drawing = true;
+    raw.push(pointerPoint(event));
+  });
+
+  canvas.addEventListener("pointermove", function (event) {
+    if (!drawing) return;
+    var p = pointerPoint(event);
+    var last = raw[raw.length - 1];
+    if (!last || Math.abs(p.x - last.x) + Math.abs(p.y - last.y) > 1.5) raw.push(p);
+  });
+
+  function finishDrawing(event) {
+    if (!drawing) return;
+    drawing = false;
+    if (event && canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    if (raw.length < 3) {
+      startDrawing();
+      return;
+    }
+    analyse(raw);
+  }
+
+  canvas.addEventListener("pointerup", finishDrawing);
+  canvas.addEventListener("pointercancel", finishDrawing);
+
+  redrawBtn.addEventListener("click", startDrawing);
+
+  playBtn.addEventListener("click", function () {
+    playing = !playing;
+    playBtn.textContent = playing ? "Pause" : "Play";
+  });
+
+  speedInput.addEventListener("input", function () {
+    speed = parseFloat(speedInput.value);
+    speedVal.textContent = speed.toFixed(1) + "\u00d7";
+  });
+
+  termsInput.addEventListener("input", function () {
+    used = parseInt(termsInput.value, 10);
+    termsVal.textContent = used;
+    trail = [];
+  });
+
+  guideInput.addEventListener("change", function () {
+    showGuide = guideInput.checked;
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.target && /^(INPUT|BUTTON|TEXTAREA)$/.test(event.target.tagName)) return;
+    if (event.code === "Space") {
+      event.preventDefault();
+      playing = !playing;
+      playBtn.textContent = playing ? "Pause" : "Play";
+    }
+  });
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    resize();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (mode === "animate" && raw.length > 1) trail = [];
+    }, 150);
+  });
+
+  // ---- go ------------------------------------------------------------
+
+  resize();
+  analyse(demoShape());
+  statusEl.textContent = "Drag anywhere on the canvas to draw your own shape.";
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
